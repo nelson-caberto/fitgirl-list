@@ -1,7 +1,7 @@
 from lxml import html
 import requests
 import csv
-import time
+from time import sleep
 
 def getRepacks(pageNumber):
     global repacks
@@ -11,30 +11,52 @@ def getRepacks(pageNumber):
     return repacks
 
 def scrapeRepack(url):
+    global scrapeData
     response = requests.get(url)
     page = html.fromstring(response.content)
 
-    title = page.xpath('//h1[@class="entry-title"]/text()')[0]
-    repack_date = page.xpath('//time[@class="entry-date"]/@datetime')[0]
-    magnet = page.xpath('//a[text()="magnet"]/@href')
+    results = {}
+    for data in scrapeData:
+        scrape = page.xpath(scrapeData[data])
+        if scrape:
+            results[data] = scrape[0]
+        else:
+            results[data] = ''
 
-    #check in case there is no magnet link
-    if magnet:
-        magnet = magnet[0]
-    else:
-        magnet = ''
+    return results
 
-    #be nice, dont spam
-    time.sleep(1)
+def getLatestRepacks():
+    global repacks
+    response = requests.get('http://fitgirl-repacks.site/category/lossless-repack/')
+    #assert no issues with request
+    repacks = html.fromstring(response.content).xpath('//h1[@class="entry-title"]/a/@href')
+    return repacks
 
-    return (title, repack_date, magnet)
+scrapeData = {
+    'title':'//h1[@class="entry-title"]/text()',
+    'repack_date':'//time[@class="entry-date"]/@datetime',
+    'l377x_url':'//a[text()="1337x"]/@href',
+    'KAT_url':'//a[text()="KAT"]/@href',
+    'magnet':'//a[text()="magnet"]/@href'
+}
+
+with open('latest repacks.csv', 'w', newline='') as csvfile:
+    writer = csv.DictWriter(csvfile, fieldnames=scrapeData.keys())
+    writer.writeheader()
+    for repack in getLatestRepacks():
+        print(repack)
+        writer.writerow(scrapeRepack(repack))
+        sleep(0.5)
 
 with open('repacks.csv', 'w', newline='') as csvfile:
-    writer = csv.writer(csvfile)
-    writer.writerow(['title','repack date','magnet link'])
+    writer = csv.DictWriter(csvfile, fieldnames=scrapeData.keys())
+    writer.writeheader()
     page = 1
     while len(getRepacks(page)) > 0:
         page = page + 1
         for repack in repacks:
             print(repack)
             writer.writerow(scrapeRepack(repack))
+
+            #be nice, dont spam
+            sleep(0.5)
